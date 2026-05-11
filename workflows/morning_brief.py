@@ -45,4 +45,58 @@ class MorningBriefWorkflow(BaseWorkflow):
         Returns:
             str: The formatted markdown brief.
         """
-        raise NotImplementedError("Task 3: implement MorningBriefWorkflow.execute()")
+        # Step 1: Fetch open PRs
+        prs = github_tools.get_open_prs(self.mcp, self.config.GITHUB_REPO)
+
+        # Step 2: Fetch priority issues
+        issues = github_tools.get_priority_issues(self.mcp, self.config.GITHUB_REPO)
+
+        # Step 3: Fetch overnight alerts
+        alerts = db_tools.get_overnight_alerts()
+
+        # Step 4: Load prompt template
+        prompt_template = self._load_prompt("morning_brief.txt")
+
+        # Step 5: Format data for injection into prompt
+        pr_data = self._format_prs(prs) if prs else "No data returned from github_pull_requests"
+        issue_data = self._format_issues(issues) if issues else "No data returned from github_issues"
+        alert_data = self._format_alerts(alerts) if alerts else "No data returned from db_overnight_alerts"
+
+        # Inject data into prompt
+        prompt = prompt_template.replace("{{PR_DATA}}", pr_data)
+        prompt = prompt.replace("{{ISSUE_DATA}}", issue_data)
+        prompt = prompt.replace("{{ALERT_DATA}}", alert_data)
+
+        # Step 6: Call Claude to synthesize the brief
+        response = self.mcp.ask(prompt)
+
+        # Step 7: Return response
+        return response
+
+    def _format_prs(self, prs: list[dict]) -> str:
+        """Format PR data for prompt injection."""
+        if not prs:
+            return "No PRs"
+        lines = []
+        for pr in prs:
+            lines.append(f"- PR #{pr['number']}: {pr['title']} (by {pr['author']}, open {pr['days_open']}d, {pr['review_count']} reviews)")
+        return "\n".join(lines)
+
+    def _format_issues(self, issues: list[dict]) -> str:
+        """Format issue data for prompt injection."""
+        if not issues:
+            return "No issues"
+        lines = []
+        for issue in issues:
+            assignee_str = f"assigned to {issue['assignee']}" if issue['assignee'] != 'unassigned' else "unassigned"
+            lines.append(f"- [{issue['priority']}] #{issue['number']}: {issue['title']} ({assignee_str}, open {issue['days_open']}d)")
+        return "\n".join(lines)
+
+    def _format_alerts(self, alerts: list[dict]) -> str:
+        """Format overnight alert data for prompt injection."""
+        if not alerts:
+            return "No alerts"
+        lines = []
+        for alert in alerts:
+            lines.append(f"- {alert['service']}: error rate {alert['error_rate']}/s (baseline {alert['baseline']}/s, +{alert['delta_pct']}%) at {alert['hour_utc']}:00 UTC")
+        return "\n".join(lines)

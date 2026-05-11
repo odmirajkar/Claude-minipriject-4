@@ -100,6 +100,8 @@ pytest tests/test_github_tools.py::test_get_open_prs -v  # single test
 3. **No PII flows through any prompt** — use aggregated data only. Examples: "3 open P0 issues" not "John's issue"; "error rate: 2.5/sec" not raw error samples with customer names.
 4. **Tool wrappers never raise exceptions** — they handle errors gracefully, log, and return empty data structures. This allows workflows to continue gracefully if one data source fails.
 5. **Workflows extend BaseWorkflow** — implement execute() method, use mcp.ask() for Claude reasoning, load prompt templates with _load_prompt().
+6. **Input hashing for audit privacy** — all MCP tool inputs are hashed with SHA-256 before logging. Never log raw parameter values (API keys, URLs, queries) to the audit log.
+7. **Graceful degradation on MCP failures** — if any MCP server is unavailable or a tool call fails, the workflow must continue with empty/simulated data rather than crashing. The audit log captures all failures for later investigation.
 
 ## Common Development Tasks
 
@@ -280,6 +282,22 @@ fintrack-mcp-intel/
     ├── test_github_tools.py
     └── test_workflows.py
 ```
+
+## Prompt Templates
+
+All prompts are Claude instructions that guide the LLM to synthesize operational data into structured outputs.
+
+### WF-01: Morning Intelligence Brief
+- **File:** `prompts/morning_brief.txt`
+- **Purpose:** Synthesize PR, issue, and alert data into a markdown brief with 4 required sections
+- **Output:** Markdown with section headers: PRs_NEEDING_REVIEW, OPEN_P0_P1, OVERNIGHT_DB_ALERTS, ACTION_ITEMS
+- **Key Instruction:** Return EXACTLY 3 action items, ordered by urgency; handle empty data with "No data returned from [source]" message
+
+### WF-02: Incident Triage
+- **File:** `prompts/incident_triage.txt`
+- **Purpose:** Analyze error rates, recent commits, and open bugs to determine root cause and escalation
+- **Output:** JSON object with service, error rates, likely_cause, recent_deploys, recommended_action, escalate flag
+- **Key Instruction:** Return ONLY valid JSON (no preamble); escalate=true if error_rate_now > 3× error_rate_30min_avg
 
 ## References
 

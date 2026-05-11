@@ -62,20 +62,28 @@ class AuditLogger:
             status:      'success' or 'error'
             duration_ms: Wall-clock milliseconds the tool call took
         """
-        # TODO: Build the log entry dict with all required fields.
-        #       Hash tool_input with SHA-256 — store the hex digest, not the raw value.
-        #       Create the log directory if it doesn't exist.
-        #       Append the entry as a JSON line to self.log_path.
-        #       If any I/O error occurs: print a warning to sys.stderr and return — do NOT raise.
-        raise NotImplementedError("Task 1: implement AuditLogger.log()")
+        try:
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+
+            entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "workflow": workflow,
+                "tool": tool,
+                "input_hash": self._hash_input(tool_input),
+                "status": status,
+                "duration_ms": duration_ms,
+            }
+
+            with open(self.log_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            print(f"Warning: failed to write audit log: {e}", file=sys.stderr)
 
     @staticmethod
     def _hash_input(tool_input: dict) -> str:
         """Return the SHA-256 hex digest of the JSON-serialised input."""
-        # TODO: Implement this.
-        #       Serialise tool_input to a JSON string (sorted keys for determinism),
-        #       encode to bytes, and return the SHA-256 hex digest.
-        raise NotImplementedError("Task 1: implement _hash_input()")
+        json_str = json.dumps(tool_input, sort_keys=True)
+        return hashlib.sha256(json_str.encode()).hexdigest()
 
     def recent(self, n: int = 20) -> list[dict]:
         """Return the last n log entries as a list of dicts."""

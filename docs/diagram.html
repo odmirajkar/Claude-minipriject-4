@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinTrack MCP Architecture Diagram</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .header {
+            color: white;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: white;
+            color: #1e3c72;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.95em;
+        }
+
+        .btn:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn.active {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .canvas-container {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        svg {
+            flex: 1;
+        }
+
+        .legend {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.9em;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .steps-panel {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            background: white;
+            border: 2px solid #1e3c72;
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+        }
+
+        .steps-panel h3 {
+            margin: 0 0 10px 0;
+            color: #1e3c72;
+            font-size: 0.95em;
+        }
+
+        .steps-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .steps-list li {
+            padding: 8px;
+            margin: 4px 0;
+            background: #f0f0f0;
+            border-left: 4px solid #ff6b6b;
+            font-size: 0.9em;
+            color: #333;
+            border-radius: 3px;
+        }
+
+        .steps-list li.active {
+            background: #ffe0e0;
+            border-left-color: #ff6b6b;
+            font-weight: bold;
+        }
+
+        .steps-list li.completed {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+            color: #2e7d32;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+
+        /* Node styles */
+        .node {
+            cursor: pointer;
+        }
+
+        .node-circle {
+            stroke: white;
+            stroke-width: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .node-label {
+            font-size: 12px;
+            font-weight: 500;
+            text-anchor: middle;
+            pointer-events: none;
+            fill: white;
+        }
+
+        .node:hover .node-circle {
+            stroke-width: 3px;
+            filter: brightness(1.2);
+        }
+
+        /* Link styles */
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+            transition: all 0.3s ease;
+            marker-end: url(#arrowhead);
+        }
+
+        .link.active {
+            stroke: #ff6b6b;
+            stroke-width: 3px;
+            stroke-opacity: 1;
+        }
+
+        .link-label {
+            font-size: 11px;
+            fill: #666;
+            pointer-events: none;
+            background: white;
+        }
+
+        /* Workflow specific styles */
+        .workflow-input { fill: #4ecdc4; }
+        .workflow { fill: #ff6b6b; }
+        .mcp-server { fill: #45b7d1; }
+        .tool { fill: #96ceb4; }
+        .database { fill: #ffeaa7; }
+        .output { fill: #dfe6e9; }
+        .api { fill: #a29bfe; }
+
+        .tooltip {
+            position: absolute;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .workflow-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .workflow-tabs .btn {
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .legend {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .controls, .workflow-tabs {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 FinTrack MCP Architecture</h1>
+        <p>Interactive workflow visualization | Hover over nodes to explore connections</p>
+    </div>
+
+    <div class="workflow-tabs">
+        <button class="btn active" onclick="switchWorkflow('overview')">📋 Overview</button>
+        <button class="btn" onclick="switchWorkflow('morning')">🌅 Morning Brief (WF-01)</button>
+        <button class="btn" onclick="switchWorkflow('incident')">🚨 Incident Triage (WF-02)</button>
+    </div>
+
+    <div class="canvas-container">
+        <svg id="diagram"></svg>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color workflow-input"></div>
+                <span>User Input (CLI)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color workflow"></div>
+                <span>Workflow</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color tool"></div>
+                <span>Tool/Helper</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color mcp-server"></div>
+                <span>MCP Server</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color api"></div>
+                <span>External API</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color database"></div>
+                <span>Data Source</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color output"></div>
+                <span>Output</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Data for different workflows
+        const workflows = {
+            overview: {
+                nodes: [
+                    { id: 'user', label: 'User (CLI)', type: 'workflow-input', description: 'Run: python main.py' },
+                    { id: 'main', label: 'main.py', type: 'tool', description: 'CLI Entry Point' },
+                    { id: 'config', label: 'config.py', type: 'tool', description: 'Load env vars' },
+                    { id: 'mcp-client', label: 'MCPClient', type: 'tool', description: 'Connect to MCP' },
+                    { id: 'anthropic-sdk', label: 'Anthropic SDK', type: 'api', description: 'LLM API' },
+                    { id: 'wf-morning', label: 'WF-01\nMorning Brief', type: 'workflow', description: 'Daily briefing' },
+                    { id: 'wf-incident', label: 'WF-02\nIncident Triage', type: 'workflow', description: 'Live triage' },
+                    { id: 'github-mcp', label: 'github-mcp', type: 'mcp-server', description: 'GitHub API' },
+                    { id: 'pg-mcp', label: 'pg-mcp', type: 'mcp-server', description: 'PostgreSQL API' },
+                    { id: 'github-api', label: 'GitHub API', type: 'api', description: 'External Service' },
+                    { id: 'db', label: 'PostgreSQL\nDatabase', type: 'database', description: 'Data Storage' },
+                    { id: 'output-md', label: 'Markdown\nOutput', type: 'output', description: 'Formatted brief' },
+                    { id: 'output-json', label: 'JSON\nOutput', type: 'output', description: 'Incident report' },
+                    { id: 'audit', label: 'audit.log', type: 'database', description: 'Governance log' },
+                ],
+                links: [
+                    { source: 'user', target: 'main', label: 'invoke', step: 1 },
+                    { source: 'main', target: 'config', label: 'load', step: 2 },
+                    { source: 'main', target: 'mcp-client', label: 'create', step: 3 },
+                    { source: 'mcp-client', target: 'anthropic-sdk', label: 'use', step: 4 },
+                    { source: 'main', target: 'wf-morning', label: 'run', step: 5 },
+                    { source: 'main', target: 'wf-incident', label: 'run', step: 5 },
+                    { source: 'wf-morning', target: 'mcp-client', label: 'call', step: 6 },
+                    { source: 'wf-incident', target: 'mcp-client', label: 'call', step: 6 },
+                    { source: 'anthropic-sdk', target: 'github-mcp', label: 'connect', step: 7 },
+                    { source: 'anthropic-sdk', target: 'pg-mcp', label: 'connect', step: 7 },
+                    { source: 'github-mcp', target: 'github-api', label: 'request', step: 8 },
+                    { source: 'pg-mcp', target: 'db', label: 'query', step: 8 },
+                    { source: 'wf-morning', target: 'output-md', label: 'return', step: 9 },
+                    { source: 'wf-incident', target: 'output-json', label: 'return', step: 9 },
+                    { source: 'wf-morning', target: 'audit', label: 'log', step: 9 },
+                    { source: 'wf-incident', target: 'audit', label: 'log', step: 9 },
+                ],
+                steps: [
+                    '1. User runs CLI command (python main.py)',
+                    '2. Load environment variables (tokens, URLs)',
+                    '3. Create MCPClient context manager',
+                    '4. Connect to Anthropic SDK (LLM)',
+                    '5. Execute workflow (Morning Brief or Incident Triage)',
+                    '6. Workflow calls tool wrappers',
+                    '7. MCPClient connects to MCP servers (GitHub, PostgreSQL)',
+                    '8. MCP servers fetch data from GitHub API and PostgreSQL',
+                    '9. Workflow formats and returns output, audit logs the calls'
+                ]
+            },
+            morning: {
+                nodes: [
+                    { id: 'user', label: 'User', type: 'workflow-input', description: 'python main.py --workflow morning-brief' },
+                    { id: 'main', label: 'main.py', type: 'tool', description: 'Route to workflow' },
+                    { id: 'wf-morning', label: 'MorningBriefWorkflow\nexecute()', type: 'workflow', description: 'WF-01 Logic' },
+                    { id: 'github-tools', label: 'github_tools.py', type: 'tool', description: 'get_open_prs()' },
+                    { id: 'github-tools2', label: 'github_tools.py', type: 'tool', description: 'get_priority_issues()' },
+                    { id: 'db-tools', label: 'db_tools.py', type: 'tool', description: 'get_overnight_alerts()' },
+                    { id: 'audit', label: 'AuditLogger', type: 'tool', description: 'Log calls' },
+                    { id: 'mcp-gh', label: 'github-mcp\ngithub_pull_requests', type: 'mcp-server', description: 'Fetch PRs' },
+                    { id: 'mcp-gh2', label: 'github-mcp\ngithub_issues', type: 'mcp-server', description: 'Fetch issues' },
+                    { id: 'prompt', label: 'morning_brief.txt', type: 'tool', description: 'Load prompt' },
+                    { id: 'claude', label: 'Claude API', type: 'api', description: 'Reasoning engine' },
+                    { id: 'output', label: 'Markdown\nOutput', type: 'output', description: 'Formatted brief' },
+                    { id: 'github-api', label: 'GitHub', type: 'api', description: 'External' },
+                ],
+                links: [
+                    { source: 'user', target: 'main', label: 'invoke', step: 1 },
+                    { source: 'main', target: 'wf-morning', label: 'execute', step: 2 },
+                    { source: 'wf-morning', target: 'github-tools', label: 'call', step: 3 },
+                    { source: 'wf-morning', target: 'github-tools2', label: 'call', step: 4 },
+                    { source: 'wf-morning', target: 'db-tools', label: 'call', step: 5 },
+                    { source: 'github-tools', target: 'mcp-gh', label: 'call', step: 3 },
+                    { source: 'github-tools2', target: 'mcp-gh2', label: 'call', step: 4 },
+                    { source: 'github-tools', target: 'audit', label: 'log', step: 3 },
+                    { source: 'github-tools2', target: 'audit', label: 'log', step: 4 },
+                    { source: 'mcp-gh', target: 'github-api', label: 'request', step: 3 },
+                    { source: 'mcp-gh2', target: 'github-api', label: 'request', step: 4 },
+                    { source: 'wf-morning', target: 'prompt', label: 'load', step: 6 },
+                    { source: 'wf-morning', target: 'claude', label: 'ask with data', step: 7 },
+                    { source: 'claude', target: 'output', label: 'return', step: 8 },
+                ],
+                steps: [
+                    '1. User runs: python main.py --workflow morning-brief',
+                    '2. main.py creates MorningBriefWorkflow and calls execute()',
+                    '3. Call get_open_prs() → mcp.call(github_pull_requests) → GitHub API',
+                    '4. Call get_priority_issues() → mcp.call(github_issues) → GitHub API',
+                    '5. Call get_overnight_alerts() → simulated DB data',
+                    '6. Load morning_brief.txt prompt template',
+                    '7. Call Claude API with injected data (PRs, issues, alerts)',
+                    '8. Claude synthesizes markdown output with required sections',
+                    '9. Return formatted brief + audit log all MCP calls'
+                ]
+            },
+            incident: {
+                nodes: [
+                    { id: 'user', label: 'User', type: 'workflow-input', description: 'python main.py --workflow incident-triage --service payments' },
+                    { id: 'main', label: 'main.py', type: 'tool', description: 'Route to workflow' },
+                    { id: 'wf-incident', label: 'IncidentTriageWorkflow\nexecute(service_name)', type: 'workflow', description: 'WF-02 Logic' },
+                    { id: 'db-tools', label: 'db_tools.py', type: 'tool', description: 'get_error_rate(30m)' },
+                    { id: 'db-tools2', label: 'db_tools.py', type: 'tool', description: 'get_error_rate(5m)' },
+                    { id: 'github-tools', label: 'github_tools.py', type: 'tool', description: 'search_recent_commits()' },
+                    { id: 'github-tools2', label: 'github_tools.py', type: 'tool', description: 'get_priority_issues()' },
+                    { id: 'audit', label: 'AuditLogger', type: 'tool', description: 'Log calls' },
+                    { id: 'mcp-commits', label: 'github-mcp\ngithub_commits', type: 'mcp-server', description: 'Fetch commits' },
+                    { id: 'mcp-issues', label: 'github-mcp\ngithub_issues', type: 'mcp-server', description: 'Fetch bugs' },
+                    { id: 'prompt', label: 'incident_triage.txt', type: 'tool', description: 'Load prompt' },
+                    { id: 'claude', label: 'Claude API', type: 'api', description: 'Root cause analysis' },
+                    { id: 'output', label: 'JSON Report\n(escalate: bool)', type: 'output', description: 'Decision' },
+                    { id: 'github-api', label: 'GitHub', type: 'api', description: 'External' },
+                    { id: 'db', label: 'PostgreSQL', type: 'database', description: 'Metrics' },
+                ],
+                links: [
+                    { source: 'user', target: 'main', label: 'invoke', step: 1 },
+                    { source: 'main', target: 'wf-incident', label: 'execute', step: 2 },
+                    { source: 'wf-incident', target: 'db-tools', label: 'call', step: 3 },
+                    { source: 'wf-incident', target: 'github-tools', label: 'call', step: 4 },
+                    { source: 'wf-incident', target: 'github-tools2', label: 'call', step: 5 },
+                    { source: 'wf-incident', target: 'db-tools2', label: 'call', step: 6 },
+                    { source: 'db-tools', target: 'db', label: 'query', step: 3 },
+                    { source: 'db-tools2', target: 'db', label: 'query', step: 6 },
+                    { source: 'github-tools', target: 'mcp-commits', label: 'call', step: 4 },
+                    { source: 'github-tools2', target: 'mcp-issues', label: 'call', step: 5 },
+                    { source: 'mcp-commits', target: 'github-api', label: 'request', step: 4 },
+                    { source: 'mcp-issues', target: 'github-api', label: 'request', step: 5 },
+                    { source: 'github-tools', target: 'audit', label: 'log', step: 4 },
+                    { source: 'github-tools2', target: 'audit', label: 'log', step: 5 },
+                    { source: 'wf-incident', target: 'prompt', label: 'load', step: 7 },
+                    { source: 'wf-incident', target: 'claude', label: 'ask with data', step: 8 },
+                    { source: 'claude', target: 'output', label: 'return JSON', step: 9 },
+                ],
+                steps: [
+                    '1. User runs: python main.py --workflow incident-triage --service payments',
+                    '2. main.py executes IncidentTriageWorkflow.execute(service_name="payments")',
+                    '3. Call get_error_rate(service, window_minutes=30) → 30-min error rate',
+                    '4. Call search_recent_commits(repo, service, hours=4) → recent code changes',
+                    '5. Call get_priority_issues(repo, labels=["bug", service]) → open bugs',
+                    '6. Call get_error_rate(service, window_minutes=5) → current 5-min spike',
+                    '7. Load incident_triage.txt prompt with all collected data',
+                    '8. Call Claude API: "Analyze this incident and determine escalation"',
+                    '9. Claude returns JSON with likely_cause + escalate decision flag'
+                ]
+            }
+        };
+
+        // D3 setup
+        const width = document.getElementById('diagram').parentElement.clientWidth;
+        const height = document.getElementById('diagram').parentElement.clientHeight - 60;
+
+        const svg = d3.select('#diagram')
+            .attr('width', width)
+            .attr('height', height);
+
+        const container = svg.append('g')
+            .attr('class', 'container');
+
+        // Arrow marker
+        svg.append('defs').append('marker')
+            .attr('id', 'arrowhead')
+            .attr('markerWidth', 10)
+            .attr('markerHeight', 10)
+            .attr('refX', 25)
+            .attr('refY', 3)
+            .attr('orient', 'auto')
+            .append('polygon')
+            .attr('points', '0 0, 10 3, 0 6')
+            .attr('fill', '#999');
+
+        // Tooltip
+        const tooltip = d3.select('#tooltip');
+
+        function switchWorkflow(workflow) {
+            document.querySelectorAll('.workflow-tabs .btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            renderDiagram(workflows[workflow]);
+        }
+
+        function renderDiagram(data) {
+            // Clear previous
+            container.selectAll('*').remove();
+
+            // Show steps panel
+            const stepsPanel = document.querySelector('.steps-panel');
+            if (stepsPanel) stepsPanel.remove();
+
+            const panel = document.createElement('div');
+            panel.className = 'steps-panel';
+            panel.innerHTML = '<h3>📋 Execution Steps</h3><ol class="steps-list">' +
+                data.steps.map((step, i) => `<li class="step-${i + 1}">${step}</li>`).join('') +
+                '</ol>';
+            document.body.appendChild(panel);
+
+            // Create simulation
+            const simulation = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.links)
+                    .id(d => d.id)
+                    .distance(100))
+                .force('charge', d3.forceManyBody().strength(-400))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(50));
+
+            // Draw links
+            const link = container.append('g')
+                .selectAll('g')
+                .data(data.links)
+                .enter()
+                .append('g')
+                .attr('class', d => `link-group link-step-${d.step || 0}`);
+
+            link.append('line')
+                .attr('class', 'link')
+                .attr('stroke-width', 2)
+                .attr('marker-end', 'url(#arrowhead)');
+
+            // Add step numbers
+            link.append('circle')
+                .attr('cx', d => (d.source.x + d.target.x) / 2)
+                .attr('cy', d => (d.source.y + d.target.y) / 2)
+                .attr('r', 15)
+                .attr('fill', '#ff6b6b')
+                .attr('opacity', 0.8)
+                .attr('stroke', 'white')
+                .attr('stroke-width', 2);
+
+            link.append('text')
+                .attr('class', 'link-label')
+                .attr('text-anchor', 'middle')
+                .attr('dominant-baseline', 'middle')
+                .attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2)
+                .style('font-weight', 'bold')
+                .style('font-size', '12px')
+                .style('fill', 'white')
+                .style('pointer-events', 'none')
+                .text(d => d.step || '');
+
+            link.append('text')
+                .attr('class', 'link-label')
+                .text(d => d.label)
+                .attr('x', d => (d.source.x + d.target.x) / 2 + 20)
+                .attr('y', d => (d.source.y + d.target.y) / 2 - 15);
+
+            // Draw nodes
+            const nodeGroups = container.append('g')
+                .selectAll('g')
+                .data(data.nodes)
+                .enter()
+                .append('g')
+                .attr('class', 'node')
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded));
+
+            nodeGroups.append('circle')
+                .attr('class', 'node-circle')
+                .attr('r', 30)
+                .attr('class', d => `node-circle ${d.type}`);
+
+            nodeGroups.append('text')
+                .attr('class', 'node-label')
+                .text(d => d.label)
+                .style('font-size', '11px');
+
+            // Hover effects on nodes
+            nodeGroups.on('mouseenter', function(event, d) {
+                // Highlight connected links
+                link.select('line').classed('active', l =>
+                    l.source.id === d.id || l.target.id === d.id
+                );
+
+                // Highlight connected nodes
+                nodeGroups.select('circle').style('opacity', node =>
+                    node.id === d.id ||
+                    data.links.some(l => (l.source.id === d.id && l.target.id === node.id) ||
+                                         (l.target.id === d.id && l.source.id === node.id))
+                    ? 1 : 0.3
+                );
+
+                // Highlight related steps
+                const relatedSteps = new Set();
+                data.links.forEach(l => {
+                    if (l.source.id === d.id || l.target.id === d.id) {
+                        relatedSteps.add(l.step);
+                    }
+                });
+                document.querySelectorAll('.steps-list li').forEach(li => {
+                    const stepNum = parseInt(li.className.match(/step-(\d+)/)?.[1] || 0);
+                    li.style.opacity = relatedSteps.has(stepNum) ? 1 : 0.3;
+                });
+
+                // Show tooltip
+                tooltip.style('opacity', 1)
+                    .text(`${d.label}: ${d.description}`)
+                    .style('left', (event.pageX + 10) + 'px')
+                    .style('top', (event.pageY - 10) + 'px');
+            })
+            .on('mouseleave', function() {
+                link.select('line').classed('active', false);
+                nodeGroups.select('circle').style('opacity', 1);
+                document.querySelectorAll('.steps-list li').forEach(li => li.style.opacity = 1);
+                tooltip.style('opacity', 0);
+            });
+
+            // Hover effects on links to highlight steps
+            link.on('mouseenter', function(event, d) {
+                d3.select(this).select('line').classed('active', true);
+
+                // Highlight the step in the steps panel
+                document.querySelectorAll('.steps-list li').forEach(li => {
+                    const stepNum = parseInt(li.className.match(/step-(\d+)/)?.[1] || 0);
+                    li.classList.toggle('active', stepNum === d.step);
+                    li.style.opacity = stepNum === d.step ? 1 : 0.3;
+                });
+
+                tooltip.style('opacity', 1)
+                    .text(`Step ${d.step}: ${d.label}`)
+                    .style('left', (event.pageX + 10) + 'px')
+                    .style('top', (event.pageY - 10) + 'px');
+            })
+            .on('mouseleave', function() {
+                link.select('line').classed('active', false);
+                document.querySelectorAll('.steps-list li').forEach(li => {
+                    li.classList.remove('active');
+                    li.style.opacity = 1;
+                });
+                tooltip.style('opacity', 0);
+            });
+
+            // Update positions
+            simulation.on('tick', () => {
+                link.select('line')
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                link.select('circle')
+                    .attr('cx', d => (d.source.x + d.target.x) / 2)
+                    .attr('cy', d => (d.source.y + d.target.y) / 2);
+
+                link.selectAll('text')
+                    .attr('x', (d, i) => {
+                        if (i === 0) return (d.source.x + d.target.x) / 2; // step number text
+                        return (d.source.x + d.target.x) / 2 + 20; // label text
+                    })
+                    .attr('y', (d, i) => {
+                        if (i === 0) return (d.source.y + d.target.y) / 2; // step number
+                        return (d.source.y + d.target.y) / 2 - 15; // label
+                    });
+
+                nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            function dragStarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragEnded(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+
+        // Initial render
+        renderDiagram(workflows.overview);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const newWidth = document.getElementById('diagram').parentElement.clientWidth;
+            const newHeight = document.getElementById('diagram').parentElement.clientHeight - 60;
+            svg.attr('width', newWidth).attr('height', newHeight);
+        });
+    </script>
+</body>
+</html>
