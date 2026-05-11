@@ -1,0 +1,26 @@
+# TASK 4: Write this prompt file.
+#
+# This prompt receives four data inputs and produces a JSON object.
+#
+# Your prompt must:
+#   1. Declare Claude's role (FinTrack incident triage system)
+#   2. Pass in the four data inputs:
+#        {{SERVICE_NAME}}       — the service being investigated
+#        {{ERROR_RATE_30MIN}}   — avg error rate over last 30 min (dict)
+#        {{ERROR_RATE_NOW}}     — current error rate last 5 min (dict)
+#        {{RECENT_COMMITS}}     — list of recent commits (list of dicts)
+#        {{OPEN_BUGS}}          — open bug issues for this service (list of dicts)
+#   3. Instruct Claude to return ONLY a JSON object matching this schema:
+#        {
+#          "service": str,
+#          "error_rate_now": float,
+#          "error_rate_30min_avg": float,
+#          "likely_cause": str,
+#          "recent_deploys": list[str],
+#          "recommended_action": str,
+#          "escalate": bool
+#        }
+#   4. Include: "Return ONLY the JSON object. No preamble, no explanation, no markdown."
+#   5. Include escalation rule: set escalate=true if error_rate_now > 3x error_rate_30min_avg
+#
+# Replace this entire comment block with your actual prompt.
